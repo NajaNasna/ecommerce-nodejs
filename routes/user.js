@@ -1,34 +1,100 @@
 var express = require('express');
 var router = express.Router();
+var productHelpers = require('../helpers/product-helpers')
+var userHelpers = require('../helpers/user-helpers');
+const { response } = require('../app');
+
+const verifyLogin =(req,res,next) =>{
+  if(req.session.loggedIn){
+    next()
+  }else{
+    res.redirect('/login')
+  }
+}
+
 
 /* GET home page. */
-router.get('/', function(req, res, next) {
+router.get('/', async function(req, res, next) {
+  let user = req.session.user
+  console.log(user)
+  let cartCount = null
+  if(req.session.user){
+    cartCount = await userHelpers.getCartCount(req.session.user._id)
+  }
+  productHelpers.getAllProducts().then((products)=>{
+    // console.log(products)
+    res.render('user/view-products',{admin:false,products,user,cartCount});
+   })
   
-  let products=[
-    {
-      name:"Vivo",
-      category:"Mobile",
-      description:"This is a mobile",
-      image:"https://media-ik.croma.com/prod/https://media.croma.com/image/upload/v1666000526/Croma%20Assets/CMS/CAtegory/Mobile%20phone%20-%20C10/NEW%20PCP%20DESIGN%20-%20OCT/Updated/MPCP_shopbybrand_vivo_27sep2022_bxrwva.png?tr=w-1000"
-    },
-    {
-      name:"iPhone",
-      category:"Mobile",
-      description:"This is a mobile",
-      image:"https://www.godigit.com/content/dam/godigit/directportal/en/contenthm/apple-iphone12-mini-mobiles.jpg"
-    },{
-      name:"OnePlus",
-      category:"Mobile",
-      description:"This is a mobile",
-      image:"https://www.reliancedigital.in/medias/One-Plus-10R-Mobile-Phone-492850198-i-4-1200Wx1200H?context=bWFzdGVyfGltYWdlc3w3MzAxOXxpbWFnZS9qcGVnfGltYWdlcy9oYWYvaDlmLzk4NzM5NzQwNjcyMzAuanBnfGRhOWY5NzJiY2MxMWNkNzcwNmNjNGMzYTZiZDNlZDVkNzk0MGJiNjY3ZGIyYWFkMDEzNGM5MjQ0NjI0NzRkY2Y"
-    },{
-      name:"Nokia",
-      category:"Mobile",
-      description:"This is a mobile",
-      image:"https://5.imimg.com/data5/BK/SP/MY-40083844/nokia-5130-xpressmusic-mltimedia-mobile-phones-500x500.jpg"
-    },
-  ]
-  res.render('index', {products,admin:false});
 });
 
+
+router.get('/login',(req,res)=>{
+  if(req.session.loggedIn){
+    res.redirect('/')
+  }else{
+  res.render('user/login',{"loginErr":req.session.loginErr})
+  req.session.loginErr = false
+}
+});
+
+router.get('/signup',(req,res)=>{
+  res.render('user/signup')
+});
+
+
+router.post('/signup',(req,res)=>{
+  userHelpers.doSignup(req.body).then((response)=>{
+    console.log(response)
+    if(response){
+      req.session.loggedIn = true
+      req.session.user = response
+      res.redirect('/login')
+
+    }
+  })
+});
+
+router.post('/login',(req,res)=>{
+  userHelpers.doLogin(req.body).then((response)=>{
+    if(response.status){
+      req.session.loggedIn = true
+      req.session.user = response.user
+      res.redirect('/')
+    }else{
+      req.session.loginErr = true
+      res.redirect('/login')
+    }
+  })
+})
+
+
+router.get('/logout',(req,res)=>{
+  req.session.destroy();
+  res.redirect('/');
+})
+
+
+
+router.get('/cart',verifyLogin,async(req,res)=>{
+
+  let products =await userHelpers.getCartProducts(req.session.user._id)
+  console.log(products)
+  res.render('user/cart',{products,user:req.session.user})
+})
+
+
+
+router.get('/add-to-cart/:id',verifyLogin,(req,res)=>{
+  console.log('api called--------------')
+  userHelpers.addToCart(req.params.id,req.session.user._id).then(()=>{
+    // res.redirect('/')
+    res.json({status:true})
+  })
+})
+
+
+
 module.exports = router;
+
+
