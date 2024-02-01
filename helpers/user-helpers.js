@@ -46,20 +46,57 @@ module.exports ={
 
 
     addToCart : (prodId,userId)=>{
+
+        let proObj = {
+            item : new ObjectId(prodId),
+            quantity : 1
+        }
+
         return new Promise(async(resolve,reject)=>{
             let userCart = await db.get().collection(collection.CART_COLLECTION).findOne({user:new ObjectId(userId)})
             if(userCart){
+
+
+                let proExist = userCart.products.findIndex(product =>  product.item.equals(new ObjectId(prodId)))
+
+
+                // let proExist = userCart.products.findIndex(product => product.item && product.item.equals(new ObjectId(prodId)))
+
+                // let proExist = userCart.products.findIndex(product => {
+                //     return product.item && product.item.equals(new ObjectId(prodId));
+                // });
+
+                // let proExist = userCart.products.findIndex(product => {
+                //     if (product.item) {
+                //         return product.item.equals(new ObjectId(prodId));
+                //     } else {
+                //         return product.equals(new ObjectId(prodId));
+                //     }
+                // });
+
+                console.log(proExist)
+                if(proExist != -1){
+                    db.get().collection(collection.CART_COLLECTION)
+                    .updateOne({'products.item' : new ObjectId(prodId)},
+                    {
+                        $inc:{'products.$.quantity': 1}
+                    }).then(()=>{
+                        resolve()
+                    })
+                }else{
+
                 db.get().collection(collection.CART_COLLECTION)
                 .updateOne({user:new ObjectId(userId)},
                 {
-                    $push:{products:new ObjectId(prodId)}
+                    $push:{products: proObj}
                 }).then((response)=>{
                     resolve()
                 })
+            }
             }else{
                 let cartObj = {
                     user:new ObjectId(userId),
-                    products:[new ObjectId(prodId)]
+                    products:[proObj]
                 }
                 db.get().collection(collection.CART_COLLECTION).insertOne(cartObj).then((response)=>{
                     resolve()
@@ -75,23 +112,41 @@ module.exports ={
                     $match:{user:new ObjectId(userId)}
                 },
                 {
+                    $unwind:'$products'
+                },
+                {
+                    $project : {
+                        item :'$products.item',
+                        quantity :'$products.quantity'
+                    }
+                },
+                {
                     $lookup:{
-                        from:collection.PRODUCT_COLLECTION,
-                        let:{prodList:'$products'},
-                        pipeline:[
-                            {
-                                $match:{
-                                    $expr:{
-                                        $in:['$_id',"$$prodList"]
-                                    }
-                                }
-                            }
-                        ],
-                        as:'cartItems'
+                        from : collection.PRODUCT_COLLECTION,
+                        localField:'item',
+                        foreignField:'_id',
+                        as:'product'
                     }
                 }
+                // {
+                //     $lookup:{
+                //         from:collection.PRODUCT_COLLECTION,
+                //         let:{prodList:'$products'},
+                //         pipeline:[
+                //             {
+                //                 $match:{
+                //                     $expr:{
+                //                         $in:['$_id',"$$prodList"]
+                //                     }
+                //                 }
+                //             }
+                //         ],
+                //         as:'cartItems'
+                //     }
+                // }
             ]).toArray()
-            resolve(cartItems[0].cartItems)
+            console.log(cartItems[0].products)
+            resolve(cartItems)
         })
     },
 
